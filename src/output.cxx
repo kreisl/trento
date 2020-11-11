@@ -93,7 +93,7 @@ void write_text_file(const fs::path& output_dir, int width, int num,
 class HDF5Writer {
  public:
   /// Prepare an HDF5 file for writing.
-  HDF5Writer(const fs::path& filename);
+  explicit HDF5Writer(const fs::path& filename);
 
   /// Write an event.
   void operator()(int num, double impact_param,
@@ -115,7 +115,11 @@ void hdf5_add_scalar_attr(
 
 HDF5Writer::HDF5Writer(const fs::path& filename)
     : file_(filename.string(), H5F_ACC_TRUNC)
-{}
+{
+  file_.createGroup("/Grids");
+  file_.createGroup("/SpectatorsA");
+  file_.createGroup("/SpectatorsB");
+}
 
 void HDF5Writer::operator()(int num, double impact_param,
     int ncoll, const Event& event) const {
@@ -144,7 +148,7 @@ void HDF5Writer::operator()(int num, double impact_param,
   proplist.setDeflate(4);
 
   // Create the new dataset and write the grid.
-  auto dataset = file_.createDataSet(name, datatype, dataspace, proplist);
+  auto dataset = file_.createDataSet(std::string("/Grids/")+name, datatype, dataspace, proplist);
   dataset.write(grid.data(), datatype);
 
   // Write event attributes.
@@ -157,6 +161,30 @@ void HDF5Writer::operator()(int num, double impact_param,
   hdf5_add_scalar_attr(dataset, "mult", event.multiplicity());
   for (const auto& ecc : event.eccentricity())
     hdf5_add_scalar_attr(dataset, "e" + std::to_string(ecc.first), ecc.second);
+
+  auto positions_spectatorsA = event.position_spectatorsA();
+  auto positions_spectatorsB = event.position_spectatorsB();
+
+  std::array<hsize_t, boost::multi_array<double, 2>::dimensionality> shape_spec;
+  std::copy(positions_spectatorsA.shape(),
+            positions_spectatorsA.shape() + shape_spec.size(),
+            shape_spec.begin());
+  auto dataspace_specA = hdf5::make_dataspace(shape_spec);
+  auto dataspace_specB = hdf5::make_dataspace(shape_spec);
+
+  auto dataset_specA = file_.createDataSet(std::string("/SpectatorsA/") + name,
+                                           datatype, dataspace_specA);
+  hdf5_add_scalar_attr(dataset_specA, "mean_x", event.mean_position_spectatorsA().first);
+  hdf5_add_scalar_attr(dataset_specA, "mean_y", event.mean_position_spectatorsA().second);
+  hdf5_add_scalar_attr(dataset_specA, "n", event.n_spectatorsA());
+  dataset_specA.write(positions_spectatorsA.data(), datatype);
+
+  auto dataset_specB = file_.createDataSet(std::string("/SpectatorsB/") + name,
+                                           datatype, dataspace_specB);
+  hdf5_add_scalar_attr(dataset_specB, "mean_x", event.mean_position_spectatorsB().first);
+  hdf5_add_scalar_attr(dataset_specB, "mean_y", event.mean_position_spectatorsB().second);
+  hdf5_add_scalar_attr(dataset_specB, "n", event.n_spectatorsB());
+  dataset_specB.write(positions_spectatorsB.data(), datatype);
 }
 
 #endif  // TRENTO_HDF5
@@ -188,6 +216,7 @@ Output::Output(const VarMap& var_map) {
         throw std::runtime_error{"file '" + output_path.string() +
                                  "' exists, will not overwrite"};
       writers_.emplace_back(HDF5Writer{output_path});
+
 #else
       throw std::runtime_error{"HDF5 output was not compiled"};
 #endif  // TRENTO_HDF5

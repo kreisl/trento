@@ -41,6 +41,8 @@ class NucleonCommon;
 /// \endrst
 class Event {
  public:
+  enum class WhichNucleus { A, B};
+
   /// Instantiate from the configuration.
   explicit Event(const VarMap& var_map);
 
@@ -81,12 +83,30 @@ class Event {
   const Grid& reduced_thickness_grid() const
   { return TR_; }
 
+  std::pair<double, double> mean_position_spectatorsA() const
+  { return std::pair<double,double>{ixspecA_, iyspecA_}; }
+
+  std::pair<double, double> mean_position_spectatorsB() const
+  { return std::pair<double,double>{ixspecB_, iyspecB_}; }
+
+  int n_spectatorsA() const
+  { return nspecA_; }
+
+  int n_spectatorsB() const
+  { return nspecB_; }
+
+  const boost::multi_array<double, 2> &position_spectatorsA() const
+  { return positions_specA; }
+
+  const boost::multi_array<double, 2> &position_spectatorsB() const
+  { return positions_specB; }
+
  private:
   /// Compute a nuclear thickness function (TA or TB) onto a grid for a given
   /// nucleus and nucleon profile.  This destroys any data previously contained
   /// by the grid.
   void compute_nuclear_thickness(
-      const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX);
+      const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX, WhichNucleus AorB);
 
   /// Compute the reduced thickness function (TR) after computing TA and TB.
   /// Template parameter GenMean sets the actual function that returns TR(TA, TB).
@@ -129,6 +149,14 @@ class Event {
 
   /// Eccentricity harmonics.
   std::map<int, double> eccentricity_;
+
+  /// spectators centroid positions
+  double ixspecA_, iyspecA_;
+  int nspecA_;
+  double ixspecB_, iyspecB_;
+  int nspecB_;
+  boost::multi_array<double,2> positions_specA;
+  boost::multi_array<double,2> positions_specB;
 };
 
 }  // namespace trento

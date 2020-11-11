@@ -52,7 +52,9 @@ Event::Event(const VarMap& var_map)
       xymax_(.5*nsteps_*dxy_),
       TA_(boost::extents[nsteps_][nsteps_]),
       TB_(boost::extents[nsteps_][nsteps_]),
-      TR_(boost::extents[nsteps_][nsteps_]) {
+      TR_(boost::extents[nsteps_][nsteps_]),
+      positions_specA(boost::extents[208][2]),
+      positions_specB(boost::extents[208][2]) {
   // Choose which version of the generalized mean to use based on the
   // configuration.  The possibilities are defined above.  See the header for
   // more information.
@@ -79,10 +81,20 @@ void Event::compute(const Nucleus& nucleusA, const Nucleus& nucleusB,
                     const NucleonCommon& nucleon_common) {
   // Reset npart; compute_nuclear_thickness() increments it.
   npart_ = 0;
-  compute_nuclear_thickness(nucleusA, nucleon_common, TA_);
-  compute_nuclear_thickness(nucleusB, nucleon_common, TB_);
+  ixspecA_ = 0.;
+  iyspecA_ = 0.;
+  ixspecB_ = 0.;
+  iyspecB_ = 0.;
+  nspecA_ = 0;
+  nspecB_ = 0;
+  compute_nuclear_thickness(nucleusA, nucleon_common, TA_, WhichNucleus::A);
+  compute_nuclear_thickness(nucleusB, nucleon_common, TB_, WhichNucleus::B);
   compute_reduced_thickness_();
   compute_observables();
+  ixspecA_ /= nspecA_;
+  iyspecA_ /= nspecA_;
+  ixspecB_ /= nspecB_;
+  iyspecB_ /= nspecB_;
 }
 
 namespace {
@@ -101,7 +113,8 @@ inline const T& clip(const T& value, const T& min, const T& max) {
 }  // unnamed namespace
 
 void Event::compute_nuclear_thickness(
-    const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX) {
+    const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX,
+    WhichNucleus AorB) {
   // Construct the thickness grid by looping over participants and adding each
   // to a small subgrid within its radius.  Compared to the other possibility
   // (grid cells as the outer loop and participants as the inner loop), this
@@ -111,12 +124,24 @@ void Event::compute_nuclear_thickness(
 
   // Wipe grid with zeros.
   std::fill(TX.origin(), TX.origin() + TX.num_elements(), 0.);
-
   // Deposit each participant onto the grid.
   for (const auto& nucleon : nucleus) {
-    if (!nucleon.is_participant())
+    if (!nucleon.is_participant()) {
+      if (AorB == WhichNucleus::A) {
+        ixspecA_ += nucleon.x();
+        iyspecA_ += nucleon.y();
+        positions_specA[nspecA_][0] = nucleon.x();
+        positions_specA[nspecA_][1] = nucleon.y();
+        ++nspecA_;
+      } else {
+        ixspecB_ += nucleon.x();
+        iyspecB_ += nucleon.y();
+        positions_specB[nspecB_][0] = nucleon.x();
+        positions_specB[nspecB_][1] = nucleon.y();
+        ++nspecB_;
+      }
       continue;
-
+    }
     ++npart_;
 
     // Get nucleon subgrid boundary {xmin, xmax, ymin, ymax}.
@@ -246,6 +271,7 @@ void Event::compute_observables() {
   eccentricity_[3] = e3.finish();
   eccentricity_[4] = e4.finish();
   eccentricity_[5] = e5.finish();
+
 }
 
 }  // namespace trento
