@@ -159,11 +159,12 @@ void HDF5Writer::operator()(int num, double impact_param,
   if (ncoll > 0) hdf5_add_scalar_attr(dataset, "ncoll", ncoll);
 
   hdf5_add_scalar_attr(dataset, "mult", event.multiplicity());
+  hdf5_add_scalar_attr(dataset, "spec_angle", event.spec_angle());
   for (const auto& ecc : event.eccentricity())
     hdf5_add_scalar_attr(dataset, "e" + std::to_string(ecc.first), ecc.second);
 
-  auto positions_spectatorsA = event.position_spectatorsA();
-  auto positions_spectatorsB = event.position_spectatorsB();
+  const auto &positions_spectatorsA = event.position_spectatorsA();
+  const auto &positions_spectatorsB = event.position_spectatorsB();
 
   std::array<hsize_t, boost::multi_array<double, 2>::dimensionality> shape_spec;
   std::copy(positions_spectatorsA.shape(),

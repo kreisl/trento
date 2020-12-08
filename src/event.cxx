@@ -81,20 +81,21 @@ void Event::compute(const Nucleus& nucleusA, const Nucleus& nucleusB,
                     const NucleonCommon& nucleon_common) {
   // Reset npart; compute_nuclear_thickness() increments it.
   npart_ = 0;
-  ixspecA_ = 0.;
-  iyspecA_ = 0.;
-  ixspecB_ = 0.;
-  iyspecB_ = 0.;
+  xspecA_ = 0.;
+  yspecA_ = 0.;
+  xspecB_ = 0.;
+  yspecB_ = 0.;
   nspecA_ = 0;
   nspecB_ = 0;
   compute_nuclear_thickness(nucleusA, nucleon_common, TA_, WhichNucleus::A);
   compute_nuclear_thickness(nucleusB, nucleon_common, TB_, WhichNucleus::B);
   compute_reduced_thickness_();
+  xspecA_ /= nspecA_;
+  yspecA_ /= nspecA_;
+  xspecB_ /= nspecB_;
+  yspecB_ /= nspecB_;
   compute_observables();
-  ixspecA_ /= nspecA_;
-  iyspecA_ /= nspecA_;
-  ixspecB_ /= nspecB_;
-  iyspecB_ /= nspecB_;
+
 }
 
 namespace {
@@ -114,7 +115,7 @@ inline const T& clip(const T& value, const T& min, const T& max) {
 
 void Event::compute_nuclear_thickness(
     const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX,
-    WhichNucleus AorB) {
+    const WhichNucleus AorB) {
   // Construct the thickness grid by looping over participants and adding each
   // to a small subgrid within its radius.  Compared to the other possibility
   // (grid cells as the outer loop and participants as the inner loop), this
@@ -128,37 +129,37 @@ void Event::compute_nuclear_thickness(
   for (const auto& nucleon : nucleus) {
     if (!nucleon.is_participant()) {
       if (AorB == WhichNucleus::A) {
-        ixspecA_ += nucleon.x();
-        iyspecA_ += nucleon.y();
+        xspecA_ += nucleon.x();
+        yspecA_ += nucleon.y();
         positions_specA[nspecA_][0] = nucleon.x();
         positions_specA[nspecA_][1] = nucleon.y();
         ++nspecA_;
       } else {
-        ixspecB_ += nucleon.x();
-        iyspecB_ += nucleon.y();
+        xspecB_ += nucleon.x();
+        yspecB_ += nucleon.y();
         positions_specB[nspecB_][0] = nucleon.x();
         positions_specB[nspecB_][1] = nucleon.y();
         ++nspecB_;
       }
-      continue;
-    }
-    ++npart_;
-
-    // Get nucleon subgrid boundary {xmin, xmax, ymin, ymax}.
-    const auto boundary = nucleon_common.boundary(nucleon);
-
-    // Determine min & max indices of nucleon subgrid.
-    int ixmin = clip(static_cast<int>((boundary[0]+xymax_)/dxy_), 0, nsteps_-1);
-    int ixmax = clip(static_cast<int>((boundary[1]+xymax_)/dxy_), 0, nsteps_-1);
-    int iymin = clip(static_cast<int>((boundary[2]+xymax_)/dxy_), 0, nsteps_-1);
-    int iymax = clip(static_cast<int>((boundary[3]+xymax_)/dxy_), 0, nsteps_-1);
-
-    // Add profile to grid.
-    for (auto iy = iymin; iy <= iymax; ++iy) {
-      for (auto ix = ixmin; ix <= ixmax; ++ix) {
-        TX[iy][ix] += nucleon_common.thickness(
-          nucleon, (ix+.5)*dxy_ - xymax_, (iy+.5)*dxy_ - xymax_
-        );
+    } else {
+      ++npart_;
+      // Get nucleon subgrid boundary {xmin, xmax, ymin, ymax}.
+      const auto boundary = nucleon_common.boundary(nucleon);
+      // Determine min & max indices of nucleon subgrid.
+      int ixmin =
+          clip(static_cast<int>((boundary[0] + xymax_) / dxy_), 0, nsteps_ - 1);
+      int ixmax =
+          clip(static_cast<int>((boundary[1] + xymax_) / dxy_), 0, nsteps_ - 1);
+      int iymin =
+          clip(static_cast<int>((boundary[2] + xymax_) / dxy_), 0, nsteps_ - 1);
+      int iymax =
+          clip(static_cast<int>((boundary[3] + xymax_) / dxy_), 0, nsteps_ - 1);
+      // Add profile to grid.
+      for (auto iy = iymin; iy <= iymax; ++iy) {
+        for (auto ix = ixmin; ix <= ixmax; ++ix) {
+          TX[iy][ix] += nucleon_common.thickness(
+              nucleon, (ix + .5) * dxy_ - xymax_, (iy + .5) * dxy_ - xymax_);
+        }
       }
     }
   }
@@ -197,7 +198,18 @@ void Event::compute_observables() {
     double wt = 0.;  // weight
     double finish() const  // compute final eccentricity
     { return std::sqrt(re*re + im*im) / std::fmax(wt, TINY); }
-  } e2, e3, e4, e5;
+  } erp, esp, e2, e3, e4, e5;
+
+  auto spec_x_mean = (xspecA_*nspecA_ + xspecB_*nspecB_) / (nspecA_ + nspecB_);
+  auto spec_y_mean = (yspecA_*nspecA_ + yspecB_*nspecB_) / (nspecA_ + nspecB_);
+  auto spec_x_mean_shift = (spec_x_mean + xymax_ - dxy_/2) / dxy_;
+  auto spec_y_mean_shift = (spec_y_mean + xymax_ - dxy_/2) / dxy_;
+  const auto spec_x = xspecA_ - xspecB_;
+  const auto spec_y = yspecA_ - yspecB_;
+  spec_angle_ = std::atan2(spec_y - spec_y_mean, spec_x - spec_x_mean);
+//  spec_angle_ = std::atan2(spec_y - iycm_, spec_x - ixcm_);
+  const double cos_spec_angle = std::cos(spec_angle_);
+  const double sin_spec_angle = std::sin(spec_angle_);
 
   for (int iy = 0; iy < nsteps_; ++iy) {
     for (int ix = 0; ix < nsteps_; ++ix) {
@@ -223,6 +235,13 @@ void Event::compute_observables() {
       auto xy = x*y;
       auto x2y2 = x2*y2;
 
+      auto xs = static_cast<double>(ix) - spec_x_mean_shift;
+      auto ys = static_cast<double>(iy) - spec_y_mean_shift;
+
+      auto xprime = xs * cos_spec_angle - ys * sin_spec_angle;
+      auto yprime = xs * sin_spec_angle + ys * cos_spec_angle;
+      auto xprime2 = xprime * xprime;
+      auto yprime2 = yprime * yprime;
       // The eccentricity harmonics are weighted averages of r^n*exp(i*n*phi)
       // over the entropy profile (reduced thickness).  The naive way to compute
       // exp(i*n*phi) at a given (x, y) point is essentially:
@@ -249,6 +268,12 @@ void Event::compute_observables() {
       // cancels the r^2 weight.  This cancellation occurs for all n.
       //
       // The Event unit test verifies that the two methods agree.
+      erp.re += t * (y2 - x2);
+      erp.wt += t * r2;
+
+      esp.re += t * (yprime2 - xprime2);
+      esp.wt += t * (xprime2 + yprime2);
+
       e2.re += t * (y2 - x2);
       e2.im += t * 2.*xy;
       e2.wt += t * r2;
@@ -267,6 +292,8 @@ void Event::compute_observables() {
     }
   }
 
+  eccentricity_[0] = erp.finish();
+  eccentricity_[1] = esp.finish();
   eccentricity_[2] = e2.finish();
   eccentricity_[3] = e3.finish();
   eccentricity_[4] = e4.finish();

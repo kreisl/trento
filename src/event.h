@@ -84,10 +84,10 @@ class Event {
   { return TR_; }
 
   std::pair<double, double> mean_position_spectatorsA() const
-  { return std::pair<double,double>{ixspecA_, iyspecA_}; }
+  { return std::pair<double,double>{xspecA_, yspecA_}; }
 
   std::pair<double, double> mean_position_spectatorsB() const
-  { return std::pair<double,double>{ixspecB_, iyspecB_}; }
+  { return std::pair<double,double>{xspecB_, yspecB_}; }
 
   int n_spectatorsA() const
   { return nspecA_; }
@@ -101,12 +101,15 @@ class Event {
   const boost::multi_array<double, 2> &position_spectatorsB() const
   { return positions_specB; }
 
+  double spec_angle() const { return spec_angle_; }
+
  private:
   /// Compute a nuclear thickness function (TA or TB) onto a grid for a given
   /// nucleus and nucleon profile.  This destroys any data previously contained
   /// by the grid.
   void compute_nuclear_thickness(
-      const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX, WhichNucleus AorB);
+      const Nucleus& nucleus, const NucleonCommon& nucleon_common, Grid& TX,
+      WhichNucleus AorB);
 
   /// Compute the reduced thickness function (TR) after computing TA and TB.
   /// Template parameter GenMean sets the actual function that returns TR(TA, TB).
@@ -151,12 +154,13 @@ class Event {
   std::map<int, double> eccentricity_;
 
   /// spectators centroid positions
-  double ixspecA_, iyspecA_;
+  double xspecA_, yspecA_;
   int nspecA_;
-  double ixspecB_, iyspecB_;
+  double xspecB_, yspecB_;
   int nspecB_;
   boost::multi_array<double,2> positions_specA;
   boost::multi_array<double,2> positions_specB;
+  double spec_angle_;
 };
 
 }  // namespace trento
